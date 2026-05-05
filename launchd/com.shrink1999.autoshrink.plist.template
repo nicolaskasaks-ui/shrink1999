@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.shrink1999.autoshrink</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BIN__</string>
+    <string>__WATCH_DIR__</string>
+  </array>
+
+  <key>WatchPaths</key>
+  <array>
+    <string>__WATCH_DIR__</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>2</integer>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/shrink1999.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/shrink1999.err.log</string>
+</dict>
+</plist>

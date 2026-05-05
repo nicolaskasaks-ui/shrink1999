@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# shrink1999
+# Watches a directory and shrinks any image whose longest side > MAX
+# (default 1999px) IN PLACE, after backing up the original. The shrunk
+# image is then copied to the system clipboard so it can be pasted (Cmd+V)
+# directly into Claude or any other app.
+#
+# Designed to be triggered by launchd's WatchPaths. launchd fires this
+# script whenever the watched directory changes; the script scans once
+# and exits.
+#
+# Usage:
+#   shrink1999 [WATCH_DIR]
+#   MAX=1600 shrink1999 ~/SomeFolder
+#
+# Env:
+#   MAX             max pixel dimension on the long side (default 1999)
+#   NO_CLIPBOARD=1  skip clipboard copy
+#   NO_NOTIFY=1     skip macOS notification
+
+set -euo pipefail
+
+WATCH_DIR="${1:-$HOME/ClaudeImages}"
+MAX="${MAX:-1999}"
+BACKUP_ROOT="$HOME/.shrink1999-backups"
+LOG="$HOME/Library/Logs/shrink1999.log"
+LOCK_DIR="/tmp/shrink1999.lock.d"
+
+mkdir -p "$BACKUP_ROOT" "$(dirname "$LOG")"
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
+
+# Single-flight via atomic mkdir (no flock dependency on macOS).
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  exit 0
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+
+if ! command -v sips >/dev/null 2>&1; then
+  log "ERROR: sips not found (this tool requires macOS)"
+  exit 1
+fi
+
+shopt -s nullglob nocaseglob
+cd "$WATCH_DIR" 2>/dev/null || { log "cant cd to $WATCH_DIR"; exit 1; }
+
+processed=0
+last_shrunk=""
+
+for f in *.jpg *.jpeg *.png *.heic *.webp *.tif *.tiff *.bmp *.gif; do
+  [ -f "$f" ] || continue
+
+  # Skip if we already processed this file (xattr marker).
+  if xattr -p com.shrink1999.done "$f" >/dev/null 2>&1; then
+    continue
+  fi
+
+  dims="$(sips -g pixelWidth -g pixelHeight "$f" 2>/dev/null || true)"
+  w="$(echo "$dims" | awk '/pixelWidth:/  {print $2}')"
+  h="$(echo "$dims" | awk '/pixelHeight:/ {print $2}')"
+  [ -z "${w:-}" ] || [ -z "${h:-}" ] && continue
+
+  long=$(( w > h ? w : h ))
+  if [ "$long" -le "$MAX" ]; then
+    xattr -w com.shrink1999.done "ok-$(date +%s)" "$f" 2>/dev/null || true
+    continue
+  fi
+
+  # Backup original
+  day_dir="$BACKUP_ROOT/$(date +%Y-%m-%d)"
+  mkdir -p "$day_dir"
+  ts="$(date +%H%M%S)"
+  backup="$day_dir/${ts}__$f"
+  cp -p "$f" "$backup"
+
+  # Resize in place
+  if sips --resampleHeightWidthMax "$MAX" "$f" --out "$f" >/dev/null 2>&1; then
+    new_dims="$(sips -g pixelWidth -g pixelHeight "$f" 2>/dev/null)"
+    nw="$(echo "$new_dims" | awk '/pixelWidth:/  {print $2}')"
+    nh="$(echo "$new_dims" | awk '/pixelHeight:/ {print $2}')"
+    xattr -w com.shrink1999.done "shrunk-$(date +%s)" "$f" 2>/dev/null || true
+    log "shrunk: $f  ${w}x${h} -> ${nw}x${nh}  (backup: $backup)"
+    processed=$((processed+1))
+    last_shrunk="$f"
+    last_dims="${nw}x${nh}"
+    last_orig_dims="${w}x${h}"
+  else
+    log "FAIL to resize: $f (backup kept at $backup)"
+  fi
+done
+
+if [ "$processed" -gt 0 ] && [ -n "$last_shrunk" ]; then
+  abs_path="$(cd "$(dirname "$last_shrunk")" && pwd)/$(basename "$last_shrunk")"
+
+  # Copy shrunk image to clipboard (always PNG-encoded for compatibility).
+  clipboard_ok=0
+  if [ -z "${NO_CLIPBOARD:-}" ]; then
+    tmp_png="$(mktemp -t shrink1999).png"
+    if sips -s format png "$abs_path" --out "$tmp_png" >/dev/null 2>&1; then
+      if osascript -e "set the clipboard to (read (POSIX file \"$tmp_png\") as «class PNGf»)" 2>>"$LOG"; then
+        clipboard_ok=1
+        log "clipboard <- $abs_path"
+      else
+        log "clipboard FAIL for $abs_path"
+      fi
+      rm -f "$tmp_png"
+    fi
+  fi
+
+  # Banner notification (auto-dismisses, no click required).
+  if [ -z "${NO_NOTIFY:-}" ]; then
+    if [ "$clipboard_ok" = "1" ]; then
+      msg="$last_orig_dims → $last_dims · ready to paste (Cmd+V)"
+    else
+      msg="$last_orig_dims → $last_dims"
+    fi
+    osascript -e "display notification \"$msg\" with title \"shrink1999\" sound name \"\"" 2>/dev/null || true
+  fi
+
+  log "run complete, processed=$processed"
+fi
+exit 0

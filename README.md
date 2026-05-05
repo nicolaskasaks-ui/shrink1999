@@ -91,7 +91,10 @@ defaults write com.apple.screencapture location ~/Desktop && killall SystemUISer
 | --------------- | -------------------- | --------------------------------------------- |
 | `MAX`           | `1999`               | Max pixel dimension on the long side          |
 | `NO_CLIPBOARD`  | unset                | Set to `1` to skip clipboard copy             |
-| `NO_NOTIFY`     | unset                | Set to `1` to skip the banner notification    |
+| `NOTIFY_STYLE`  | `notification`       | `notification` (banner), `dialog` (auto-dismissing window, always visible), or `none` |
+| `NO_NOTIFY`     | unset                | Shortcut for `NOTIFY_STYLE=none`              |
+
+To set environment variables for the launchd agent, add them to `~/Library/LaunchAgents/com.shrink1999.autoshrink.plist` under an `<key>EnvironmentVariables</key><dict>...</dict>` block, then reload the agent.
 
 Want to watch a different folder? Edit `~/Library/LaunchAgents/com.shrink1999.autoshrink.plist` and change both occurrences of the path, then:
 
@@ -124,13 +127,28 @@ Removes the agent and binary. Asks before reverting your screenshot location. Le
 
 ### I don't see the notification banner
 
-The notification still fired and the clipboard still has the shrunk image — you can paste with `Cmd+V`. But to make banners visible:
+`osascript display notification` shows banners as "Script Editor" in macOS, which is silently dropped when:
 
-1. **System Settings → Notifications →** scroll down and find **Script Editor**.
-   Enable *Allow Notifications* and choose *Banners* (not *Alerts* — alerts require a click to dismiss).
-2. **Disable Focus modes.** If Do Not Disturb, Work, or any other Focus is active, banners are silenced. Click the date/time in the top-right of the menu bar and check your Focus state.
+- *Script Editor* notifications are disabled in **System Settings → Notifications** (default on many Macs).
+- Any **Focus** mode is active (Do Not Disturb, Work, etc.).
 
-Why "Script Editor"? `osascript display notification` uses the system Script Editor's notification entitlement. There's no way to register a custom name without shipping a signed `.app` bundle, which would defeat the "zero dependencies, one curl" install.
+Two options:
+
+**Option A — fix banners.** Open System Settings → Notifications, scroll to Script Editor, enable *Allow Notifications* and choose *Banners*. Make sure no Focus is active.
+
+**Option B — switch to dialog mode (recommended if banners refuse to work).** Edit `~/Library/LaunchAgents/com.shrink1999.autoshrink.plist` and add:
+
+```xml
+<key>EnvironmentVariables</key>
+<dict>
+  <key>NOTIFY_STYLE</key>
+  <string>dialog</string>
+</dict>
+```
+
+Then `launchctl unload` + `launchctl load -w` the plist. You'll get a small floating window that auto-dismisses in 2s. It works on every Mac without any permission setup. Trade-off: it briefly steals focus.
+
+Either way, **the clipboard copy and resize still work** — you can paste with `Cmd+V` whether the notification shows or not.
 
 ### How do I know it's working at all?
 

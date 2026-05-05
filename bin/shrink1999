@@ -16,7 +16,11 @@
 # Env:
 #   MAX             max pixel dimension on the long side (default 1999)
 #   NO_CLIPBOARD=1  skip clipboard copy
-#   NO_NOTIFY=1     skip macOS notification
+#   NO_NOTIFY=1     skip on-screen feedback
+#   NOTIFY_STYLE    "notification" (default, banner via Notification Center)
+#                   "dialog"       (auto-dismissing floating window, 100%
+#                                   reliable but briefly steals focus)
+#                   "none"         (same as NO_NOTIFY=1)
 
 set -euo pipefail
 
@@ -107,14 +111,31 @@ if [ "$processed" -gt 0 ] && [ -n "$last_shrunk" ]; then
     fi
   fi
 
-  # Banner notification (auto-dismisses, no click required).
-  if [ -z "${NO_NOTIFY:-}" ]; then
+  # On-screen feedback (auto-dismisses, no click required).
+  style="${NOTIFY_STYLE:-notification}"
+  [ -n "${NO_NOTIFY:-}" ] && style="none"
+
+  if [ "$style" != "none" ]; then
     if [ "$clipboard_ok" = "1" ]; then
       msg="$last_orig_dims → $last_dims · ready to paste (Cmd+V)"
     else
       msg="$last_orig_dims → $last_dims"
     fi
-    osascript -e "display notification \"$msg\" with title \"shrink1999\" sound name \"\"" 2>/dev/null || true
+
+    case "$style" in
+      dialog)
+        # Floating dialog that auto-dismisses. Reliable on every Mac (no
+        # Notifications permission needed) but briefly steals focus.
+        dlg_msg="$last_orig_dims → $last_dims"
+        [ "$clipboard_ok" = "1" ] && dlg_msg="$dlg_msg"$'\n'"ready to paste (Cmd+V)"
+        osascript -e "tell application \"System Events\" to display dialog \"$dlg_msg\" buttons {\"OK\"} default button \"OK\" giving up after 2 with title \"shrink1999\" with icon note" >/dev/null 2>&1 || true
+        ;;
+      *)
+        # Default: Notification Center banner. Requires Script Editor
+        # notifications enabled in System Settings; silently fails otherwise.
+        osascript -e "display notification \"$msg\" with title \"shrink1999\" sound name \"\"" 2>/dev/null || true
+        ;;
+    esac
   fi
 
   log "run complete, processed=$processed"

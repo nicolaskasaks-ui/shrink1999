@@ -95,12 +95,42 @@ case "${ans:-N}" in
 esac
 
 echo
+bold "One last thing: notifications"
+dim "  shrink1999 sends a banner via osascript, which appears as 'Script Editor'."
+dim "  macOS may block these by default. Send a test notification now and check"
+dim "  the top-right corner of your screen:"
+echo
+osascript -e 'display notification "If you see this, you are good to go." with title "shrink1999 install test"' 2>/dev/null || true
+sleep 1
+echo
+read -r -p "  Did you see the banner? [y/N] " saw
+case "${saw:-N}" in
+  y|Y|yes|YES)
+    green "  ✓ Notifications working"
+    ;;
+  *)
+    echo
+    echo "  No worries — clipboard + auto-shrink still work without it."
+    echo "  To enable banners later:"
+    echo "    1. System Settings → Notifications → scroll to 'Script Editor'"
+    echo "       Enable 'Allow Notifications' and choose 'Banners'."
+    echo "    2. Make sure no Focus mode (Do Not Disturb, Work, etc.) is active."
+    echo
+    read -r -p "  Open System Settings → Notifications now? [y/N] " openit
+    case "${openit:-N}" in
+      y|Y|yes|YES)
+        open "x-apple.systempreferences:com.apple.preference.notifications" 2>/dev/null || true
+        ;;
+    esac
+    ;;
+esac
+
+echo
 bold "Done."
 echo
 echo "Try it:"
 echo "  1. Drop a >1999px image into $WATCH_DIR (or take a screenshot)"
-echo "  2. Wait ~1s for the notification"
-echo "  3. Cmd+V into Claude (or anywhere)"
+echo "  2. Cmd+V into Claude (or anywhere) — the shrunk version is on your clipboard"
 echo
 echo "Logs:    ~/Library/Logs/shrink1999.log"
 echo "Backups: ~/.shrink1999-backups/"

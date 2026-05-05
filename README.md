@@ -120,6 +120,32 @@ curl -fsSL https://raw.githubusercontent.com/nicolaskasaks-ui/shrink1999/main/un
 
 Removes the agent and binary. Asks before reverting your screenshot location. Leaves your images and backups alone.
 
+## Troubleshooting
+
+### I don't see the notification banner
+
+The notification still fired and the clipboard still has the shrunk image — you can paste with `Cmd+V`. But to make banners visible:
+
+1. **System Settings → Notifications →** scroll down and find **Script Editor**.
+   Enable *Allow Notifications* and choose *Banners* (not *Alerts* — alerts require a click to dismiss).
+2. **Disable Focus modes.** If Do Not Disturb, Work, or any other Focus is active, banners are silenced. Click the date/time in the top-right of the menu bar and check your Focus state.
+
+Why "Script Editor"? `osascript display notification` uses the system Script Editor's notification entitlement. There's no way to register a custom name without shipping a signed `.app` bundle, which would defeat the "zero dependencies, one curl" install.
+
+### How do I know it's working at all?
+
+Check the log:
+
+```bash
+tail -f ~/Library/Logs/shrink1999.log
+```
+
+Drop an image into `~/ClaudeImages` and you should see a `shrunk:` line within a second.
+
+### It says "shrunk" but Cmd+V doesn't paste an image
+
+Some apps don't accept clipboard images via the standard PNG pasteboard type. Test with Preview: open Preview, then File → New from Clipboard. If that works, the clipboard is fine and the issue is the destination app.
+
 ## FAQ
 
 **Does it work for non-screenshot images?**
